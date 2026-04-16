@@ -87,6 +87,25 @@ export class RoomScene extends SceneBase {
     glass.position.set(0, 4.5, -4.9);
     this.scene.add(glass);
 
+    // Door (on right wall)
+    const doorFrameGeo = new THREE.BoxGeometry(0.2, 4, 2.2);
+    const doorFrame = new THREE.Mesh(doorFrameGeo, new THREE.MeshStandardMaterial({ color: 0x5c4033, roughness: 0.8 }));
+    doorFrame.position.set(-9.9, 2, 2);
+    this.scene.add(doorFrame);
+
+    const doorGeo = new THREE.BoxGeometry(0.1, 3.8, 2);
+    const doorMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7 });
+    const door = new THREE.Mesh(doorGeo, doorMat);
+    door.position.set(-9.85, 2, 2);
+    this.scene.add(door);
+
+    // Doorknob
+    const knobGeo = new THREE.SphereGeometry(0.08, 16, 16);
+    const knobMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2 });
+    const knob = new THREE.Mesh(knobGeo, knobMat);
+    knob.position.set(-9.75, 2, 2.7);
+    this.scene.add(knob);
+
     return this.scene;
   }
 }

@@ -1,0 +1,36 @@
+import * as THREE from 'three';
+import { Storyboard } from '../storyboard/Storyboard.js';
+
+const width = 1920;
+const height = 1080;
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+renderer.setSize(width, height);
+renderer.setPixelRatio(1);
+renderer.shadowMap.enabled = true;
+document.body.appendChild(renderer.domElement);
+
+const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
+camera.position.set(0, 3, 10);
+camera.lookAt(0, 1.5, 0);
+
+const storyboard = new Storyboard(renderer, camera);
+
+// Patch fetch so assets/audio paths resolve correctly from /tools/ base URL
+const originalFetch = window.fetch;
+window.fetch = async (url, ...args) => {
+  if (typeof url === 'string' && url.startsWith('assets/audio/')) {
+    url = '../' + url;
+  }
+  return originalFetch(url, ...args);
+};
+
+window.loadStoryboard = async () => {
+  await storyboard.load('../subtitles/script.srt', '../assets/audio/manifest.json');
+};
+
+window.captureAtTime = async (time) => {
+  storyboard.update(time);
+  storyboard.render();
+  return renderer.domElement.toDataURL('image/jpeg', 0.92);
+};

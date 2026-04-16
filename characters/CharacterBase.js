@@ -16,6 +16,8 @@ export class CharacterBase {
     this.speakStartTime = 0;
     this.speakEndTime = 0;
     this.animations = []; // queued animations
+    this.moves = [];      // queued position moves
+    this.teleportEvents = []; // instantaneous position resets
     this.build();
   }
 
@@ -44,8 +46,22 @@ export class CharacterBase {
     });
   }
 
+  moveTo(targetPos, startTime, duration) {
+    this.moves.push({
+      targetPos,
+      startTime,
+      endTime: startTime + duration,
+    });
+  }
+
+  teleport(pos, time) {
+    this.teleportEvents.push({ pos, time });
+  }
+
   clearAnimations() {
     this.animations = [];
+    this.moves = [];
+    this.teleportEvents = [];
   }
 
   update(time, delta) {
@@ -64,6 +80,35 @@ export class CharacterBase {
       if (time >= anim.startTime && time <= anim.endTime) {
         const progress = (time - anim.startTime) / (anim.endTime - anim.startTime);
         anim.instance.update(progress, this);
+      }
+    }
+
+    // Position moves
+    for (const move of this.moves) {
+      if (time >= move.startTime && time < move.endTime) {
+        if (move.startPos === undefined) {
+          move.startPos = { x: this.mesh.position.x, z: this.mesh.position.z };
+        }
+        const progress = (time - move.startTime) / (move.endTime - move.startTime);
+        const t = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress; // easeInOutQuad
+        const startX = move.startPos.x;
+        const startZ = move.startPos.z;
+        this.mesh.position.x = startX + (move.targetPos.x - startX) * t;
+        this.mesh.position.z = startZ + (move.targetPos.z - startZ) * t;
+        // face movement direction
+        const dx = move.targetPos.x - this.mesh.position.x;
+        const dz = move.targetPos.z - this.mesh.position.z;
+        if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {
+          this.mesh.lookAt(this.mesh.position.x + dx, this.mesh.position.y, this.mesh.position.z + dz);
+        }
+      }
+    }
+
+    // Teleport events (applied after moves so they take precedence)
+    for (const tp of this.teleportEvents) {
+      if (time >= tp.time && time < tp.time + 0.05) {
+        this.mesh.position.x = tp.pos.x;
+        this.mesh.position.z = tp.pos.z;
       }
     }
   }

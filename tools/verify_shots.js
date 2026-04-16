@@ -1,0 +1,121 @@
+import puppeteer from 'puppeteer';
+import http from 'http';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const ROOT = path.join(__dirname, '..');
+
+const PORT = 8766;
+const CHECK_DIR = path.join(ROOT, 'storyboard');
+
+// Simple static file server from project root
+const server = http.createServer((req, res) => {
+  const reqPath = req.url.split('?')[0];
+  let filePath = path.join(ROOT, reqPath === '/' ? 'render.html' : reqPath);
+  const ext = path.extname(filePath).toLowerCase();
+  const mimeTypes = {
+    '.html': 'text/html',
+    '.js': 'application/javascript',
+    '.json': 'application/json',
+    '.srt': 'text/plain',
+    '.mp3': 'audio/mpeg',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.wav': 'audio/wav',
+  };
+  const contentType = mimeTypes[ext] || 'application/octet-stream';
+
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404);
+      res.end('Not Found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': contentType });
+    res.end(data);
+  });
+});
+
+function deleteCheckFiles() {
+  const files = fs.readdirSync(CHECK_DIR).filter((f) => f.startsWith('check_shot_') && f.endsWith('.jpg'));
+  for (const f of files) {
+    fs.unlinkSync(path.join(CHECK_DIR, f));
+  }
+  if (files.length) {
+    console.log(`Deleted ${files.length} temporary check file(s).`);
+  }
+}
+
+server.listen(PORT, async () => {
+  console.log(`Server listening on http://localhost:${PORT}`);
+
+  // Clean up any previous check files
+  deleteCheckFiles();
+
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--autoplay-policy=no-user-gesture-required'],
+  });
+  const page = await browser.newPage();
+  page.on('console', (msg) => console.log('PAGE LOG:', msg.text()));
+  page.on('pageerror', (err) => console.error('PAGE ERROR:', err.message));
+
+  await page.goto(`http://localhost:${PORT}/tools/verify.html`, {
+    waitUntil: 'networkidle2',
+  });
+
+  // Wait a moment for module script to execute
+  await new Promise((r) => setTimeout(r, 1000));
+
+  // Initialize storyboard
+  await page.evaluate(async () => {
+    await window.loadStoryboard();
+  });
+
+  // Parse SRT to determine shot times
+  const srtText = fs.readFileSync(path.join(ROOT, 'subtitles', 'script.srt'), 'utf-8');
+  const lines = srtText.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n');
+  const times = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (lines[i].trim() === '') {
+      i++;
+      continue;
+    }
+    i++; // index
+    if (i >= lines.length) break;
+    const timeLine = lines[i].trim();
+    i++;
+    const m = timeLine.match(/(\d{2}):(\d{2}):(\d{2}),(\d{3})\s+-->\s+(\d{2}):(\d{2}):(\d{2}),(\d{3})/);
+    if (!m) continue;
+    const start = parseInt(m[1]) * 3600 + parseInt(m[2]) * 60 + parseInt(m[3]) + parseInt(m[4]) / 1000;
+    const end = parseInt(m[5]) * 3600 + parseInt(m[6]) * 60 + parseInt(m[7]) + parseInt(m[8]) / 1000;
+    const mid = (start + end) / 2;
+    times.push({ start, end, mid });
+    while (i < lines.length && lines[i].trim() !== '') i++;
+  }
+
+  for (let idx = 0; idx < times.length; idx++) {
+    const t = times[idx].mid;
+    const dataUrl = await page.evaluate(async (time) => {
+      return await window.captureAtTime(time);
+    }, t);
+
+    const base64 = dataUrl.split(',')[1];
+    const buffer = Buffer.from(base64, 'base64');
+    const filename = path.join(CHECK_DIR, `check_shot_${String(idx + 1).padStart(2, '0')}.jpg`);
+    fs.writeFileSync(filename, buffer);
+    console.log(`Shot ${String(idx + 1).padStart(2, '0')}: t=${t.toFixed(2)}s -> ${filename}`);
+  }
+
+  await browser.close();
+  server.close();
+
+  console.log('\nAll shots captured. Inspect the files above, then they will be deleted.');
+  deleteCheckFiles();
+  console.log('Verification complete.');
+});

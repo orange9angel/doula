@@ -134,6 +134,7 @@ export class Doraemon extends CharacterBase {
       this.mesh.add(group);
       if (isRight) {
         this.rightArm = group;
+        this.rightArmLength = len;
         this.rightArmBaseZ = group.rotation.z;
       } else {
         this.leftArm = group;

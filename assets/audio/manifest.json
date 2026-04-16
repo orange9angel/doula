@@ -1,68 +1,196 @@
 {
   "entries": [
     {
-      "index": 1,
-      "startTime": 1.0,
-      "endTime": 3.5,
-      "character": "Doraemon",
-      "dialogue": "大雄，快起床啦！",
-      "file": "assets/audio/001_Doraemon.mp3"
-    },
-    {
       "index": 2,
-      "startTime": 3.5,
-      "endTime": 6.0,
-      "character": "Nobita",
-      "dialogue": "再让我睡五分钟嘛。",
-      "file": "assets/audio/002_Nobita.mp3"
+      "startTime": 4.0,
+      "endTime": 8.5,
+      "character": "Doraemon",
+      "dialogue": "大雄！又在走廊发呆啦？",
+      "file": "assets/audio/002_Doraemon.mp3"
     },
     {
       "index": 3,
-      "startTime": 6.5,
-      "endTime": 9.0,
-      "character": "Doraemon",
-      "dialogue": "不行哦，今天有考试！",
-      "file": "assets/audio/003_Doraemon.mp3"
+      "startTime": 8.5,
+      "endTime": 14.0,
+      "character": "Nobita",
+      "dialogue": "完蛋了……明天要和静香打网球，我肯定会漏接的。",
+      "file": "assets/audio/003_Nobita.mp3"
     },
     {
       "index": 4,
-      "startTime": 9.5,
-      "endTime": 12.0,
-      "character": "Nobita",
-      "dialogue": "啊？完蛋了！",
-      "file": "assets/audio/004_Nobita.mp3"
+      "startTime": 14.0,
+      "endTime": 18.5,
+      "character": "Doraemon",
+      "dialogue": "真是的！每次都临时抱佛脚。",
+      "file": "assets/audio/004_Doraemon.mp3"
     },
     {
       "index": 5,
-      "startTime": 13.0,
-      "endTime": 15.5,
-      "character": "Doraemon",
-      "dialogue": "走吧，我们去公园透透气！",
-      "file": "assets/audio/005_Doraemon.mp3"
+      "startTime": 18.5,
+      "endTime": 22.5,
+      "character": "Nobita",
+      "dialogue": "哆啦A梦——！拜托你，借我道具吧！",
+      "file": "assets/audio/005_Nobita.mp3"
     },
     {
       "index": 6,
-      "startTime": 15.5,
-      "endTime": 18.0,
-      "character": "Nobita",
-      "dialogue": "好啊，正好我不想复习了。",
-      "file": "assets/audio/006_Nobita.mp3"
+      "startTime": 22.5,
+      "endTime": 28.0,
+      "character": "Doraemon",
+      "dialogue": "唉，拿你没办法……那就借你这个「必中球拍」吧。",
+      "file": "assets/audio/006_Doraemon.mp3"
     },
     {
       "index": 7,
-      "startTime": 18.5,
-      "endTime": 21.0,
-      "character": "Doraemon",
-      "dialogue": "不过考试还是要考的哦。",
-      "file": "assets/audio/007_Doraemon.mp3"
+      "startTime": 28.0,
+      "endTime": 33.0,
+      "character": "Nobita",
+      "dialogue": "必中球拍？用了这个，不管什么球我都能接到吗？",
+      "file": "assets/audio/007_Nobita.mp3"
     },
     {
       "index": 8,
-      "startTime": 21.5,
-      "endTime": 24.0,
+      "startTime": 33.0,
+      "endTime": 38.5,
+      "character": "Doraemon",
+      "dialogue": "没错！它会自动引导你的手去接球，百发百中！",
+      "file": "assets/audio/008_Doraemon.mp3"
+    },
+    {
+      "index": 9,
+      "startTime": 38.5,
+      "endTime": 43.0,
       "character": "Nobita",
-      "dialogue": "啊——能不能忘掉考试啊！",
-      "file": "assets/audio/008_Nobita.mp3"
+      "dialogue": "太棒了！这样静香一定会对我刮目相看的！",
+      "file": "assets/audio/009_Nobita.mp3"
+    },
+    {
+      "index": 11,
+      "startTime": 46.0,
+      "endTime": 50.5,
+      "character": "Doraemon",
+      "dialogue": "好，我要发球了！握紧球拍啊！",
+      "file": "assets/audio/011_Doraemon.mp3"
+    },
+    {
+      "index": 12,
+      "startTime": 50.5,
+      "endTime": 55.0,
+      "character": "Nobita",
+      "dialogue": "放心吧！我现在可是「网球王子」大雄！",
+      "file": "assets/audio/012_Nobita.mp3"
+    },
+    {
+      "index": 13,
+      "startTime": 55.0,
+      "endTime": 58.5,
+      "character": "Doraemon",
+      "dialogue": "嘿——看球！",
+      "file": "assets/audio/013_Doraemon.mp3"
+    },
+    {
+      "index": 14,
+      "startTime": 58.5,
+      "endTime": 63.0,
+      "character": "Nobita",
+      "dialogue": "喝！接到了！好轻松啊！",
+      "file": "assets/audio/014_Nobita.mp3"
+    },
+    {
+      "index": 15,
+      "startTime": 63.0,
+      "endTime": 67.5,
+      "character": "Doraemon",
+      "dialogue": "哇！球真的打回来了！而且姿势还很帅！",
+      "file": "assets/audio/015_Doraemon.mp3"
+    },
+    {
+      "index": 16,
+      "startTime": 67.5,
+      "endTime": 71.0,
+      "character": "Nobita",
+      "dialogue": "哼哼，简单简单。再来一球！",
+      "file": "assets/audio/016_Nobita.mp3"
+    },
+    {
+      "index": 17,
+      "startTime": 71.0,
+      "endTime": 74.5,
+      "character": "Doraemon",
+      "dialogue": "那我就不客气了！砰！",
+      "file": "assets/audio/017_Doraemon.mp3"
+    },
+    {
+      "index": 18,
+      "startTime": 74.5,
+      "endTime": 77.5,
+      "character": "Nobita",
+      "dialogue": "接住了！再接！再接！",
+      "file": "assets/audio/018_Nobita.mp3"
+    },
+    {
+      "index": 19,
+      "startTime": 77.5,
+      "endTime": 81.5,
+      "character": "Doraemon",
+      "dialogue": "喂喂，你越来越得意忘形了哦。",
+      "file": "assets/audio/019_Doraemon.mp3"
+    },
+    {
+      "index": 20,
+      "startTime": 81.5,
+      "endTime": 86.0,
+      "character": "Nobita",
+      "dialogue": "因为根本停不下来嘛！这道具太好用了！",
+      "file": "assets/audio/020_Nobita.mp3"
+    },
+    {
+      "index": 21,
+      "startTime": 86.0,
+      "endTime": 90.5,
+      "character": "Doraemon",
+      "dialogue": "等等！球拍好像失控了！快扔掉！",
+      "file": "assets/audio/021_Doraemon.mp3"
+    },
+    {
+      "index": 22,
+      "startTime": 90.5,
+      "endTime": 93.5,
+      "character": "Nobita",
+      "dialogue": "哇啊——！我的手自己动起来了！",
+      "file": "assets/audio/022_Nobita.mp3"
+    },
+    {
+      "index": 23,
+      "startTime": 93.5,
+      "endTime": 99.0,
+      "character": "Doraemon",
+      "dialogue": "糟了！球拍进入「无限接球模式」了！它会一直追着球跑！",
+      "file": "assets/audio/023_Doraemon.mp3"
+    },
+    {
+      "index": 24,
+      "startTime": 99.0,
+      "endTime": 103.0,
+      "character": "Nobita",
+      "dialogue": "不——！我要被球拍拖着走了！救命啊——！",
+      "file": "assets/audio/024_Nobita.mp3"
+    },
+    {
+      "index": 25,
+      "startTime": 103.0,
+      "endTime": 107.5,
+      "character": "Doraemon",
+      "dialogue": "看、看前面！前面是池塘啊——！",
+      "file": "assets/audio/025_Doraemon.mp3"
+    },
+    {
+      "index": 26,
+      "startTime": 107.5,
+      "endTime": 112.0,
+      "character": "Nobita",
+      "dialogue": "噗通——！呜呜……我果然还是「落水王」大雄啊。",
+      "file": "assets/audio/026_Nobita.mp3"
     }
   ]
 }
