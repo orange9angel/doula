@@ -31,6 +31,38 @@
       "character": "Nobita",
       "dialogue": "啊？完蛋了！",
       "file": "assets/audio/004_Nobita.mp3"
+    },
+    {
+      "index": 5,
+      "startTime": 13.0,
+      "endTime": 15.5,
+      "character": "Doraemon",
+      "dialogue": "走吧，我们去公园透透气！",
+      "file": "assets/audio/005_Doraemon.mp3"
+    },
+    {
+      "index": 6,
+      "startTime": 15.5,
+      "endTime": 18.0,
+      "character": "Nobita",
+      "dialogue": "好啊，正好我不想复习了。",
+      "file": "assets/audio/006_Nobita.mp3"
+    },
+    {
+      "index": 7,
+      "startTime": 18.5,
+      "endTime": 21.0,
+      "character": "Doraemon",
+      "dialogue": "不过考试还是要考的哦。",
+      "file": "assets/audio/007_Doraemon.mp3"
+    },
+    {
+      "index": 8,
+      "startTime": 21.5,
+      "endTime": 24.0,
+      "character": "Nobita",
+      "dialogue": "啊——能不能忘掉考试啊！",
+      "file": "assets/audio/008_Nobita.mp3"
     }
   ]
 }
