@@ -11,6 +11,9 @@ export class CharacterBase {
     this.mouthBaseScaleZ = 1;
     this.headGroup = null;
     this.rightArm = null;
+    this.leftArm = null;
+    this.leftPupil = null;
+    this.rightPupil = null;
     this.baseY = 0;
     this.isSpeaking = false;
     this.speakStartTime = 0;
@@ -18,6 +21,12 @@ export class CharacterBase {
     this.animations = []; // queued animations
     this.moves = [];      // queued position moves
     this.teleportEvents = []; // instantaneous position resets
+    this.eyeTracking = {
+      active: false,
+      target: new THREE.Vector3(),
+      startTime: 0,
+      endTime: 0,
+    };
     this.build();
   }
 
@@ -32,8 +41,62 @@ export class CharacterBase {
     if (this.mouth) {
       this.mouth.scale.set(this.mouthBaseScaleX, this.mouthBaseScaleY, this.mouthBaseScaleZ);
     }
+    if (this.headGroup && !this.eyeTracking.active) {
+      this.headGroup.rotation.set(0, 0, 0);
+    }
+  }
+
+  lookAtTarget(targetPos, startTime, endTime) {
+    this.eyeTracking.active = true;
+    this.eyeTracking.target.copy(targetPos);
+    this.eyeTracking.startTime = startTime;
+    this.eyeTracking.endTime = endTime;
+  }
+
+  clearLookAtTarget() {
+    this.eyeTracking.active = false;
     if (this.headGroup) {
       this.headGroup.rotation.set(0, 0, 0);
+    }
+  }
+
+  updateEyeTracking(time) {
+    if (!this.eyeTracking.active || !this.headGroup) return;
+    if (time < this.eyeTracking.startTime || time > this.eyeTracking.endTime) {
+      if (!this.isSpeaking) {
+        this.headGroup.rotation.x = 0;
+        this.headGroup.rotation.y = 0;
+      }
+      return;
+    }
+
+    const headWorldPos = new THREE.Vector3();
+    this.headGroup.getWorldPosition(headWorldPos);
+    const target = this.eyeTracking.target;
+
+    const dx = target.x - headWorldPos.x;
+    const dy = target.y - headWorldPos.y;
+    const dz = target.z - headWorldPos.z;
+
+    const distXZ = Math.sqrt(dx * dx + dz * dz);
+    let yaw = Math.atan2(dx, dz) - this.mesh.rotation.y;
+    let pitch = -Math.atan2(dy, distXZ);
+
+    // Normalize yaw to [-PI, PI]
+    while (yaw > Math.PI) yaw -= Math.PI * 2;
+    while (yaw < -Math.PI) yaw += Math.PI * 2;
+
+    // Clamp for natural neck limits
+    const maxYaw = 0.8;
+    const maxPitch = 0.5;
+    this.headGroup.rotation.y = Math.max(-maxYaw, Math.min(maxYaw, yaw));
+    this.headGroup.rotation.x = Math.max(-maxPitch, Math.min(maxPitch, pitch));
+
+    // Optional: subtle pupil shift for extra liveliness
+    if (this.leftPupil && this.rightPupil) {
+      const pupilShift = Math.max(-0.02, Math.min(0.02, yaw * 0.03));
+      this.leftPupil.position.x = (this.leftPupil.userData.baseX || this.leftPupil.position.x) + pupilShift;
+      this.rightPupil.position.x = (this.rightPupil.userData.baseX || this.rightPupil.position.x) + pupilShift;
     }
   }
 
@@ -49,6 +112,7 @@ export class CharacterBase {
   moveTo(targetPos, startTime, duration) {
     this.moves.push({
       targetPos,
+      startPos: undefined,
       startTime,
       endTime: startTime + duration,
     });
@@ -75,6 +139,9 @@ export class CharacterBase {
       }
     }
 
+    // Eye / head tracking
+    this.updateEyeTracking(time);
+
     // Explicit animations
     for (const anim of this.animations) {
       if (time >= anim.startTime && time <= anim.endTime) {
@@ -87,7 +154,11 @@ export class CharacterBase {
     for (const move of this.moves) {
       if (time >= move.startTime && time < move.endTime) {
         if (move.startPos === undefined) {
-          move.startPos = { x: this.mesh.position.x, z: this.mesh.position.z };
+          move.startPos = {
+            x: this.mesh.position.x,
+            y: this.mesh.position.y,
+            z: this.mesh.position.z,
+          };
         }
         const progress = (time - move.startTime) / (move.endTime - move.startTime);
         const t = progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress; // easeInOutQuad
@@ -95,7 +166,11 @@ export class CharacterBase {
         const startZ = move.startPos.z;
         this.mesh.position.x = startX + (move.targetPos.x - startX) * t;
         this.mesh.position.z = startZ + (move.targetPos.z - startZ) * t;
-        // face movement direction
+        if (move.targetPos.y !== undefined) {
+          const startY = move.startPos.y;
+          this.mesh.position.y = startY + (move.targetPos.y - startY) * t;
+        }
+        // face movement direction (only if horizontal movement is significant)
         const dx = move.targetPos.x - this.mesh.position.x;
         const dz = move.targetPos.z - this.mesh.position.z;
         if (Math.abs(dx) > 0.001 || Math.abs(dz) > 0.001) {

@@ -39,11 +39,15 @@ export class Doraemon extends CharacterBase {
     const pupilGeo = new THREE.SphereGeometry(0.04, 16, 16);
     const leftPupil = new THREE.Mesh(pupilGeo, blackMat);
     leftPupil.position.set(-0.18, 0.35, 0.64);
+    leftPupil.userData.baseX = leftPupil.position.x;
     headGroup.add(leftPupil);
+    this.leftPupil = leftPupil;
 
     const rightPupil = new THREE.Mesh(pupilGeo, blackMat);
     rightPupil.position.set(0.18, 0.35, 0.64);
+    rightPupil.userData.baseX = rightPupil.position.x;
     headGroup.add(rightPupil);
+    this.rightPupil = rightPupil;
 
     // Nose
     const noseGeo = new THREE.SphereGeometry(0.08, 32, 32);
@@ -62,13 +66,20 @@ export class Doraemon extends CharacterBase {
     this.mouthBaseScaleY = mouth.scale.y;
     this.mouthBaseScaleZ = mouth.scale.z;
 
-    // Whiskers
-    const whiskerGeo = new THREE.CylinderGeometry(0.005, 0.005, 0.35, 8);
+    // Whiskers (classic Doraemon: 3 left, 3 right, horizontal fan radiating outward)
+    const whiskerGeo = new THREE.CylinderGeometry(0.003, 0.003, 0.28, 8);
     for (let side of [-1, 1]) {
       for (let i = 0; i < 3; i++) {
         const w = new THREE.Mesh(whiskerGeo, blackMat);
-        w.rotation.z = side * (0.1 + i * 0.15);
-        w.position.set(side * 0.25, -0.05 - i * 0.08, 0.6);
+        const fanOffset = (1 - i) * 0.22; // +0.22 (bottom), 0 (mid), -0.22 (top)
+        if (side === -1) {
+          // Left face: pointing left (-x), fan up/down
+          w.rotation.z = Math.PI / 2 + fanOffset;
+        } else {
+          // Right face: pointing right (+x), fan up/down
+          w.rotation.z = -Math.PI / 2 - fanOffset;
+        }
+        w.position.set(side * 0.32, -0.06 + i * 0.06, 0.58);
         headGroup.add(w);
       }
     }
@@ -146,6 +157,39 @@ export class Doraemon extends CharacterBase {
     addArm(-0.42, 1.05, 0, -0.88, 0.72, 0, false);
     // Right arm
     addArm(0.42, 1.05, 0, 0.88, 0.72, 0, true);
+
+    // Pocket racket (for RoomScene pull-out animation)
+    if (this.rightArm && this.rightArmLength) {
+      const racket = new THREE.Group();
+      // Handle
+      const handle = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.02, 0.025, 0.4, 8),
+        new THREE.MeshStandardMaterial({ color: 0x111111 })
+      );
+      handle.position.y = -0.2;
+      racket.add(handle);
+      // Frame
+      const frame = new THREE.Mesh(
+        new THREE.TorusGeometry(0.18, 0.02, 8, 16),
+        new THREE.MeshStandardMaterial({ color: 0xe60012 })
+      );
+      frame.position.y = 0.18;
+      racket.add(frame);
+      // Strings
+      const stringMat = new THREE.MeshBasicMaterial({ color: 0xeeeeee });
+      const vStr = new THREE.Mesh(new THREE.BoxGeometry(0.01, 0.32, 0.005), stringMat);
+      vStr.position.set(0, 0.18, 0);
+      racket.add(vStr);
+      const hStr = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.01, 0.005), stringMat);
+      hStr.position.set(0, 0.18, 0);
+      racket.add(hStr);
+      // Orientation
+      racket.rotation.set(Math.PI / 6, 0, Math.PI / 2);
+      racket.position.set(0, -this.rightArmLength, 0);
+      racket.visible = false;
+      this.rightArm.add(racket);
+      this.pocketRacket = racket;
+    }
 
     // Legs + Feet (grouped for animation)
     const legGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.45, 16);

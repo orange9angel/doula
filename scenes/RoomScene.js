@@ -32,6 +32,13 @@ export class RoomScene extends SceneBase {
     leftWall.receiveShadow = true;
     this.scene.add(leftWall);
 
+    // Right wall
+    const rightWall = new THREE.Mesh(wallGeo, wallMat);
+    rightWall.rotation.y = -Math.PI / 2;
+    rightWall.position.set(10, 5, 0);
+    rightWall.receiveShadow = true;
+    this.scene.add(rightWall);
+
     // Desk
     const deskTopGeo = new THREE.BoxGeometry(3, 0.15, 1.5);
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.6 });

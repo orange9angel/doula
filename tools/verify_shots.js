@@ -115,7 +115,7 @@ server.listen(PORT, async () => {
   await browser.close();
   server.close();
 
-  console.log('\nAll shots captured. Inspect the files above, then they will be deleted.');
-  deleteCheckFiles();
+  console.log('\nAll shots captured. Inspect the files above.');
+  // deleteCheckFiles();
   console.log('Verification complete.');
 });

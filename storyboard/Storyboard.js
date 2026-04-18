@@ -1,8 +1,12 @@
+import * as THREE from 'three';
 import { SRTParser } from '../lib/SRTParser.js';
 import { SceneRegistry } from '../scenes/index.js';
 import { CharacterRegistry } from '../characters/index.js';
 import { VoiceRegistry } from '../voices/index.js';
 import { AnimationRegistry } from '../animations/index.js';
+import { CameraMoveRegistry } from '../camera/index.js';
+import { CourtDirector } from '../lib/CourtDirector.js';
+import { MusicDirector, MusicCue } from '../lib/MusicDirector.js';
 
 const SCENE_EXITS = {
   RoomScene: { x: -4, z: 2 },
@@ -27,6 +31,10 @@ export class Storyboard {
     this.startTime = 0;
     this.isPlaying = false;
     this.pausedAt = 0;
+    this.cameraMoves = []; // queued camera movements
+    this.courtDirector = null;
+    this.ballEvents = [];  // precomputed ball trajectories for ParkScene
+    this.musicDirector = new MusicDirector();
   }
 
   async load(srtPath, manifestPath) {
@@ -44,13 +52,17 @@ export class Storyboard {
       console.warn('No audio manifest found, running silent mode.');
     }
 
-    // Decode audio files
+    // Decode audio files & record actual durations
+    this.audioDurations = new Map();
     for (const item of manifest.entries) {
       try {
         const resp = await fetch(item.file);
         const arrayBuffer = await resp.arrayBuffer();
         const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
         this.audioBuffers.set(item.index, audioBuffer);
+        if (item.audioDuration) {
+          this.audioDurations.set(item.index, item.audioDuration);
+        }
       } catch (err) {
         console.error(`Failed to load audio for entry ${item.index}:`, err);
       }
@@ -58,10 +70,20 @@ export class Storyboard {
 
     // Initialize first scene if specified
     const firstSceneEntry = this.entries.find((e) => e.scene);
-    if (firstSceneEntry) {
-      this.switchScene(firstSceneEntry.scene);
-    } else {
-      this.switchScene('RoomScene');
+    const initialSceneName = firstSceneEntry ? firstSceneEntry.scene : 'RoomScene';
+    this.switchScene(initialSceneName);
+
+    // Precompute which characters appear in which scenes
+    this.characterScenes = new Map();
+    let sceneCursor = initialSceneName;
+    for (const entry of this.entries) {
+      if (entry.scene) sceneCursor = entry.scene;
+      if (entry.character) {
+        if (!this.characterScenes.has(entry.character)) {
+          this.characterScenes.set(entry.character, new Set());
+        }
+        this.characterScenes.get(entry.character).add(sceneCursor);
+      }
     }
 
     // Spawn characters mentioned in SRT
@@ -71,9 +93,14 @@ export class Storyboard {
       if (CharClass) {
         const instance = new CharClass();
         this.characters.set(name, instance);
-        if (this.currentScene) {
-          this.currentScene.addCharacter(instance);
-        }
+      }
+    }
+
+    // Add only characters that belong to the initial scene
+    for (const [name, char] of this.characters) {
+      const scenes = this.characterScenes.get(name);
+      if (scenes && scenes.has(initialSceneName) && this.currentScene) {
+        this.currentScene.addCharacter(char);
       }
     }
 
@@ -82,14 +109,57 @@ export class Storyboard {
 
     // Queue animations from SRT entries
     for (const entry of this.entries) {
-      if (entry.character && entry.animation) {
-        const AnimClass = AnimationRegistry[entry.animation];
+      if (entry.character && entry.animations && entry.animations.length > 0) {
         const char = this.characters.get(entry.character);
-        if (AnimClass && char) {
-          char.playAnimation(AnimClass, entry.startTime, entry.endTime - entry.startTime);
+        if (char) {
+          for (const animName of entry.animations) {
+            const AnimClass = AnimationRegistry[animName];
+            if (AnimClass) {
+              // Use the animation's own duration so one-shot actions (like PullOutRacket)
+              // complete in their intended time rather than being stretched across the
+              // entire dialogue slot.
+              char.playAnimation(AnimClass, entry.startTime);
+            }
+          }
         }
       }
     }
+
+    // Queue camera moves from SRT entries
+    for (const entry of this.entries) {
+      if (entry.cameraMove) {
+        const { name, options } = entry.cameraMove;
+        const MoveClass = CameraMoveRegistry[name];
+        if (MoveClass) {
+          this.playCameraMove(MoveClass, entry.startTime, entry.endTime - entry.startTime, options);
+        } else {
+          console.warn(`Camera move "${name}" not found in registry.`);
+        }
+      }
+    }
+
+    // Parse and queue music cues from SRT entries
+    for (const entry of this.entries) {
+      if (entry.musicCue) {
+        const { action, options } = entry.musicCue;
+        if (action === 'Play' && options.name) {
+          const cue = new MusicCue({
+            name: options.name,
+            file: `assets/audio/music/${options.name}.wav`,
+            startTime: entry.startTime,
+            endTime: options.endTime ?? entry.endTime,
+            fadeIn: options.fadeIn ?? 1.0,
+            fadeOut: options.fadeOut ?? 1.0,
+            baseVolume: options.baseVolume ?? 0.5,
+            emotion: options.emotion || 'neutral',
+            bpm: options.bpm ?? 120,
+          });
+          this.musicDirector.addCue(cue);
+        }
+      }
+    }
+    // Auto-generate sidechain ducking from dialogue entries
+    this.musicDirector.autoDuckFromDialogues(this.entries);
 
     // Queue scene-transition movements (walk out / teleport / walk in)
     const WalkAnim = AnimationRegistry['Walk'];
@@ -122,8 +192,9 @@ export class Storyboard {
         }
 
         // Teleport to entrance and walk in after switch
-        if (WalkAnim && SCENE_ENTRANCES[nextScene]) {
+        if (SCENE_ENTRANCES[nextScene] && nextScene !== 'ParkScene' && WalkAnim) {
           const entrance = SCENE_ENTRANCES[nextScene];
+          // Generic indoor scene walk in
           const chars = Array.from(this.characters.values());
           chars.forEach((char, idx) => {
             const targetX = chars.length === 1 ? 0 : (idx === 0 ? -1.5 : 1.5);
@@ -139,6 +210,9 @@ export class Storyboard {
 
       activeScene = nextScene;
     }
+
+    // Tennis ball & swing choreography is handled in switchScene('ParkScene')
+    // via CourtDirector, so that trajectories are computed from actual positions.
   }
 
   switchScene(sceneName, skipArrange = false) {
@@ -151,12 +225,23 @@ export class Storyboard {
     const newScene = new SceneClass();
     newScene.build();
 
-    // Migrate existing characters
+    // Migrate only characters that belong to the new scene
     for (const [name, char] of this.characters) {
       if (this.currentScene) {
         this.currentScene.removeCharacter(char);
       }
-      newScene.addCharacter(char);
+      const scenes = this.characterScenes.get(name);
+      if (scenes && scenes.has(sceneName)) {
+        newScene.addCharacter(char);
+      }
+    }
+
+    // Hide RoomScene pocket racket when leaving for ParkScene
+    if (sceneName === 'ParkScene') {
+      const dora = this.characters.get('Doraemon');
+      if (dora && dora.pocketRacket) {
+        dora.pocketRacket.visible = false;
+      }
     }
 
     this.currentScene = newScene;
@@ -165,14 +250,102 @@ export class Storyboard {
       this.arrangeCharacters();
     }
 
-    // Attach park props when entering ParkScene
+    // ParkScene setup: characters at opposite baselines via CourtDirector
     if (this.currentSceneName === 'ParkScene') {
+      const courtGeom = this.currentScene.getCourtGeometry();
+      this.courtDirector = new CourtDirector(courtGeom);
+
+      const dora = this.characters.get('Doraemon');
+      const nobi = this.characters.get('Nobita');
+      const shizuka = this.characters.get('Shizuka');
+
+      if (dora && nobi) {
+        const doraPos = this.courtDirector.placePlayer('Doraemon', 'northBaseline');
+        const nobiPos = this.courtDirector.placePlayer('Nobita', 'southBaseline');
+
+        dora.setPosition(doraPos.x, doraPos.y, doraPos.z);
+        dora.mesh.lookAt(nobiPos.x, nobiPos.y, nobiPos.z);
+        nobi.setPosition(nobiPos.x, nobiPos.y, nobiPos.z);
+        nobi.mesh.lookAt(doraPos.x, doraPos.y, doraPos.z);
+      }
+
+      // Shizuka sits on the sideline bench, facing the court
+      if (shizuka) {
+        shizuka.setPosition(5.5, 0.01, 2.5);
+        shizuka.mesh.lookAt(0, 1.5, 0);
+      }
+
       for (const [name, char] of this.characters) {
-        if (!char.racketAttached) {
+        if (!char.racketAttached && (name === 'Doraemon' || name === 'Nobita')) {
           const color = name === 'Doraemon' ? 0xe60012 : 0x1a3c8a;
           this.currentScene.attachRacketToCharacter(char, color);
           char.racketAttached = true;
         }
+      }
+
+      // Precompute all ball events from CourtDirector
+      this._setupParkBallEvents();
+    }
+  }
+
+  playCameraMove(MoveClass, startTime, duration, options = {}) {
+    const instance = new MoveClass(options);
+    this.cameraMoves.push({
+      instance,
+      startTime,
+      endTime: startTime + duration,
+    });
+  }
+
+  /**
+   * Precompute ball trajectories and queue swing animations for ParkScene.
+   * Called once inside switchScene('ParkScene').
+   */
+  _setupParkBallEvents() {
+    if (!this.courtDirector) return;
+    const cd = this.courtDirector;
+    this.ballEvents = [];
+
+    // Rally 1: Doraemon serves to Nobita @ ~30s
+    const r1 = cd.computeBallFlight('Doraemon', 'Nobita', { arcHeight: 1.5 });
+    if (r1) this.ballEvents.push({ type: 'player', startTime: 30.0, flight: r1, from: 'Doraemon', to: 'Nobita' });
+
+    // Rally 2: Nobita smashes back to Doraemon @ ~32.5s
+    const r2 = cd.computeBallFlight('Nobita', 'Doraemon', { arcHeight: 1.2 });
+    if (r2) this.ballEvents.push({ type: 'player', startTime: 32.5, flight: r2, from: 'Nobita', to: 'Doraemon' });
+
+    // Queue swing animations for ball events
+    const SwingRacket = AnimationRegistry['SwingRacket'];
+    if (SwingRacket) {
+      const swingDuration = new SwingRacket().duration;
+      for (const ev of this.ballEvents) {
+        // Hitter swings at startTime
+        const hitter = this.characters.get(ev.from);
+        if (hitter) {
+          hitter.playAnimation(SwingRacket, ev.startTime, swingDuration);
+        }
+
+        // Receiver swings just before ball arrives (only for player->player)
+        if (ev.type === 'player' && ev.to) {
+          const receiver = this.characters.get(ev.to);
+          if (receiver && ev.flight) {
+            const swingTime = cd.computeSwingTime(ev.flight, ev.startTime, swingDuration);
+            receiver.playAnimation(SwingRacket, swingTime, swingDuration);
+          }
+        }
+      }
+    }
+
+    // Fly-away: racket drags Nobita into the sky @ ~44.5s
+    const nobi = this.characters.get('Nobita');
+    const nobiPos = cd.getPlayerPosition('Nobita');
+    if (nobi && nobiPos) {
+      // Ascend over 3s
+      nobi.moveTo({ x: nobiPos.x, y: 15, z: nobiPos.z }, 44.5, 3.0);
+      // Frantic arm waving while airborne
+      const WaveHand = AnimationRegistry['WaveHand'];
+      if (WaveHand) {
+        nobi.playAnimation(WaveHand, 44.5, 8.0);
       }
     }
   }
@@ -258,42 +431,102 @@ export class Storyboard {
       if (entry.character && t >= entry.startTime && t <= entry.endTime) {
         const char = this.characters.get(entry.character);
         if (char) {
-          char.speak(entry.startTime, entry.endTime - entry.startTime);
+          const slotDuration = entry.endTime - entry.startTime;
+          const audioDur = this.audioDurations.get(entry.index);
+          const speakDuration = audioDur ? Math.min(audioDur + 0.15, slotDuration) : slotDuration;
+          char.speak(entry.startTime, speakDuration);
         }
       }
     }
 
-    // Park scene tennis ball choreography
+    // Park scene tennis ball choreography (driven by CourtDirector)
     if (this.currentSceneName === 'ParkScene') {
       const parkScene = this.currentScene;
-      const dora = this.characters.get('Doraemon');
-      const nobi = this.characters.get('Nobita');
-      const doraPos = () => (dora ? { x: dora.mesh.position.x, y: 1.0, z: dora.mesh.position.z } : { x: -1.5, y: 1.0, z: 0.5 });
-      const nobiPos = () => (nobi ? { x: nobi.mesh.position.x, y: 1.0, z: nobi.mesh.position.z } : { x: 1.5, y: 1.0, z: -0.5 });
+      let activeEvent = null;
 
-      if (t >= 55.0 && t < 57.5) {
-        parkScene.setBallTrajectory(55.0, 57.5, doraPos(), { x: nobiPos().x, y: 1.0, z: nobiPos().z - 0.5 }, 0.8);
-      } else if (t >= 59.5 && t < 62.0) {
-        parkScene.setBallTrajectory(59.5, 62.0, { x: nobiPos().x, y: 1.0, z: nobiPos().z - 0.5 }, { x: doraPos().x, y: 1.0, z: doraPos().z + 0.5 }, 0.6);
-      } else if (t >= 71.5 && t < 73.5) {
-        parkScene.setBallTrajectory(71.5, 73.5, doraPos(), { x: nobiPos().x, y: 1.0, z: nobiPos().z - 0.5 }, 0.8);
-      } else if (t >= 75.0 && t < 77.0) {
-        parkScene.setBallTrajectory(75.0, 77.0, { x: nobiPos().x, y: 1.0, z: nobiPos().z - 0.5 }, { x: doraPos().x, y: 1.0, z: doraPos().z + 0.5 }, 0.6);
-      } else if (t >= 86.5 && t < 90.0) {
-        parkScene.setBallTrajectory(86.5, 90.0, doraPos(), { x: 4.0, y: 1.0, z: -4.0 }, 1.2);
-      } else if (t >= 99.0 && t < 102.0) {
-        parkScene.setBallTrajectory(99.0, 102.0, { x: 4.0, y: 1.0, z: -4.0 }, { x: 6.0, y: 0.5, z: -8.0 }, 0.5);
-      } else if (t < 55.0) {
-        if (parkScene.tennisBall) {
-          const dp = doraPos();
-          parkScene.tennisBall.position.set(dp.x, dp.y, dp.z + 0.3);
+      for (const ev of this.ballEvents) {
+        const endTime = ev.startTime + ev.flight.duration;
+        if (t >= ev.startTime && t < endTime) {
+          activeEvent = ev;
+          break;
         }
+      }
+
+      if (activeEvent) {
+        const f = activeEvent.flight;
+        parkScene.setBallTrajectory(activeEvent.startTime, activeEvent.startTime + f.duration, f.startPos, f.endPos, f.arcHeight);
+
+        // Characters track the ball with their eyes
+        if (parkScene.tennisBall) {
+          const ballPos = parkScene.tennisBall.position;
+          const hitter = this.characters.get(activeEvent.from);
+          const receiver = activeEvent.to ? this.characters.get(activeEvent.to) : null;
+
+          if (hitter) {
+            hitter.lookAtTarget(ballPos, t, t + 0.5);
+          }
+          if (receiver) {
+            receiver.lookAtTarget(ballPos, t, t + 0.5);
+          }
+        }
+      } else {
         parkScene.clearBallTrajectory();
+
+        // Find the most recent completed event and park the ball there
+        let lastEvent = null;
+        for (const ev of this.ballEvents) {
+          const endTime = ev.startTime + ev.flight.duration;
+          if (t >= endTime) {
+            lastEvent = ev;
+          }
+        }
+
+        if (lastEvent && parkScene.tennisBall) {
+          parkScene.tennisBall.position.set(lastEvent.flight.endPos.x, lastEvent.flight.endPos.y, lastEvent.flight.endPos.z);
+        } else if (t < (this.ballEvents[0]?.startTime ?? Infinity) && parkScene.tennisBall) {
+          // Before first rally: ball rests near Doraemon
+          const doraPos = this.courtDirector?.getPlayerPosition('Doraemon');
+          if (doraPos) {
+            parkScene.tennisBall.position.set(doraPos.x + 0.3, doraPos.y + 1.0, doraPos.z + 0.3);
+          }
+        }
+
+        // When ball is idle, characters look at each other
+        const dora = this.characters.get('Doraemon');
+        const nobi = this.characters.get('Nobita');
+        if (dora && nobi) {
+          const doraHead = new THREE.Vector3().copy(dora.mesh.position);
+          doraHead.y += 1.6;
+          const nobiHead = new THREE.Vector3().copy(nobi.mesh.position);
+          nobiHead.y += 1.5;
+          dora.lookAtTarget(nobiHead, t, t + 0.5);
+          nobi.lookAtTarget(doraHead, t, t + 0.5);
+        }
       }
     }
 
     if (this.currentScene) {
       this.currentScene.update(t, 0.016);
+    }
+
+    // Camera moves
+    const cameraContext = {
+      renderer: this.renderer,
+      scene: this.currentScene?.scene,
+      characters: this.characters,
+      currentScene: this.currentScene,
+    };
+
+    for (const cm of this.cameraMoves) {
+      if (t >= cm.startTime && t <= cm.endTime) {
+        if (!cm.instance.started) {
+          cm.instance.start(this.camera, cameraContext);
+        }
+        const progress = (t - cm.startTime) / (cm.endTime - cm.startTime);
+        cm.instance.update(progress, this.camera, cameraContext);
+      } else if (t > cm.endTime && cm.instance.started && !cm.instance.ended) {
+        cm.instance.end(this.camera, cameraContext);
+      }
     }
   }
 

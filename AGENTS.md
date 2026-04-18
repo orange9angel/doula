@@ -46,7 +46,9 @@ D:\opensource\movie\doula
 ├── subtitles/
 │   └── script.srt             # 剧本（SRT 协议）
 ├── lib/
-│   └── SRTParser.js           # SRT 解析器（JS）
+│   ├── SRTParser.js           # SRT 解析器（JS）
+│   ├── CourtDirector.js       # 场地-角色-球-相机协调计算层
+│   └── MusicDirector.js       # 专业配乐调度器（Cue/Duck/HitPoint/Stem）
 ├── scenes/
 │   ├── index.js               # SceneRegistry
 │   ├── SceneBase.js           # 场景基类
@@ -63,19 +65,26 @@ D:\opensource\movie\doula
 │   ├── common/                # 通用动画（Walk, Jump, WaveHand…）
 │   ├── doraemon/
 │   └── nobita/
+├── camera/
+│   ├── CameraMoveBase.js      # 运镜基类
+│   ├── index.js               # CameraMoveRegistry
+│   └── common/                # 通用运镜（ZoomIn, Pan, Orbit, Shake…）
 ├── storyboard/
 │   └── Storyboard.js          # 导演核心（场景切换、音频调度、球飞行控制）
 ├── voices/
 │   └── index.js               # VoiceRegistry（目前未使用，音频由 Python 生成）
 ├── tools/
-│   ├── generate_audio.py      # TTS + 混音
+│   ├── generate_audio.py      # TTS + BGM + SFX 混音
+│   ├── generate_bgm.py        # 程序化 BGM 合成器
 │   ├── adjust_srt.py          # 基于音频时长自动调整 SRT 时间轴（备用）
 │   ├── verify_shots.js        # 逐镜头验证脚本
 │   ├── verify.html            # 验证用浏览器入口
 │   └── verify_render.js       # 验证用渲染逻辑
 └── assets/audio/
     ├── *.mp3                  # 逐句 TTS 输出
-    ├── manifest.json          # 音频清单（index, startTime, endTime, file）
+    ├── sfx/                   # 音效（tennis_hit.wav 等）
+    ├── music/                 # 背景音乐（room_theme.wav 等）
+    ├── manifest.json          # 音频清单
     └── mixed.wav              # ffmpeg 混音结果
 ```
 
@@ -99,6 +108,14 @@ D:\opensource\movie\doula
 - `@SceneName`：场景切换指令（如 `@RoomScene`, `@ParkScene`）。必须独占一行，可视为该时间段内的一个特殊条目。
 - `[Character]`：说话角色，用于匹配 TTS 声线、触发嘴型动画、调度音频。
 - `{Action}`：身体动画标签，在 TTS 生成前会被 Python 脚本剥离。
+- `{Camera:MoveName}`：运镜指令（如 `{Camera:ZoomIn}`）。与身体动画标签互不冲突，可共存于同一句。
+  - **参数语法**：`{Camera:ClassName|key=value|key2=1,2,3}`，数组值用逗号分隔。例如 `{Camera:Static|position=6,2.5,2|lookAt=0,1.2,0}`。
+- `{Music:Action|key=value}`：配乐提示（Cue）。例如 `{Music:Play|name=park_theme|fadeIn=1.5|baseVolume=0.5|endTime=39.8}`。
+  - `name`：BGM 文件名（对应 `assets/audio/music/{name}.wav`）。
+  - `fadeIn` / `fadeOut`：淡入淡出时长（秒）。
+  - `baseVolume`：基础音量（0~1）。
+  - `endTime`：音乐结束时间（可跨多个 SRT 条目持续播放）。
+  - `emotion` / `bpm`：情绪标签与速度（供 MusicDirector 智能选曲使用）。
 
 ### 动作标签清单（已注册在 `animations/common/`）
 | 标签 | 动画类 | 效果 |
@@ -110,6 +127,19 @@ D:\opensource\movie\doula
 | `{SwayBody}` | `SwayBody` | 身体摇摆 |
 | `{Nod}` | `Nod` | 点头 |
 | `{TurnToCamera}` | `TurnToCamera` | 转身面向镜头（由 Storyboard 自动调度） |
+| `{SwingRacket}` | `SwingRacket` | 挥拍（拉拍→击球→随挥，0.6s） |
+
+### 运镜标签清单（已注册在 `camera/common/`）
+| 标签 | 运镜类 | 效果 |
+|------|--------|------|
+| `{Camera:Static}` | `Static` | 固定机位（可指定 `position=6,2.5,2`, `lookAt=0,1.2,0`） |
+| `{Camera:ZoomIn}` | `ZoomIn` | 推镜（`targetPos=0,1.5,0`, `distance=3.5`） |
+| `{Camera:ZoomOut}` | `ZoomOut` | 拉镜（`targetPos=0,1.5,0`, `distance=10`） |
+| `{Camera:Pan}` | `Pan` | 平移（`offset=2,0,0`, `lookAt=0,1.5,0`） |
+| `{Camera:Orbit}` | `Orbit` | 环绕（`center=0,1.5,0`, `radius=8`, `startAngle=0`, `endAngle=90`, `height=3`） |
+| `{Camera:Shake}` | `Shake` | 震动（`intensity=0.25`, `duration=0.6`） |
+| `{Camera:FollowCharacter}` | `FollowCharacter` | 跟随角色（`characterName=Nobita`, `offset=0,3,6`, `lookAtOffset=0,1.5,0`） |
+| `{Camera:LowAngle}` | `LowAngle` | 低角度仰拍（`targetPos=0,1.5,0`, `distance=4`） |
 
 **注意**：时间轴必须给足音频播放时长。Edge-tts 中文语速约 1 秒 4~5 字，短句也应留 ≥2.5s。重叠会导致 `amix` 后听感混乱。
 
@@ -137,15 +167,59 @@ D:\opensource\movie\doula
 ## 6. 音频管线
 
 1. `python tools/generate_audio.py` 读取 `subtitles/script.srt`。
-2. 对每句含 `[Character]` 的文本，调用 `edge_tts.Communicate` 生成 `{index:03d}_{Character}.mp3`。
+2. **TTS 生成**：对每句含 `[Character]` 的文本，调用 `edge_tts.Communicate` 生成 `{index:03d}_{Character}.mp3`。
    - Doraemon：`zh-CN-XiaoxiaoNeural`，rate `+10%`，pitch `+10Hz`
    - Nobita：`zh-CN-YunxiNeural`，rate `-5%`，pitch `-5Hz`
-3. 生成 `assets/audio/manifest.json`，记录每句的 `index`, `startTime`, `endTime`, `character`, `dialogue`, `file`。
-4. 调用 ffmpeg `amix` 滤镜，按 `adelay` 对齐各 MP3 的起始时间，输出 `mixed.wav`（48kHz 16bit PCM）。
+   - Shizuka：`zh-CN-XiaoyiNeural`，rate `+0%`，pitch `+5Hz`
+3. **BGM 素材**：不再使用程序化合成（音质有限）。用户需将下载的高质量音乐素材（WAV 格式）放入 `assets/audio/music/`。
+   - 命名：`room_theme.wav`（室内）、`park_theme.wav`（公园）、`chaos_theme.wav`（失控）。
+   - 来源推荐：Pixabay Music（免费商用免署名）、Fesliyan Studios Cartoon 分类、Free Music Archive。
+4. **BGM 混音（Python 样本级）**：`generate_audio.py` 读取 BGM cue 定义，在样本级别应用：
+   - **Fade In/Out**：正弦缓动曲线。
+   - **Sidechain Ducking**：对话期间自动压低 BGM（Attack=0.12s, Release=0.35s, Depth=0.32），合并重叠避让区间。
+   - **Soft Limiter**：`tanh` 软限幅防止数字削波。
+   若素材缺失则自动跳过 BGM 混音，仅保留 TTS + SFX。
+5. **SFX 生成**：合成 `tennis_hit.wav`（高频扫频 + 噪声），在指定时间点插入。
+6. **最终混音**：ffmpeg `amix` 将 TTS + BGM + SFX 按 `adelay` 对齐混合，输出 `mixed.wav`（48kHz 16bit PCM）。
 
 ### 音频重叠根因与修复
 - **根因**：旧版 SRT 给每句的时间槽（slot）远短于 edge-tts 实际音频时长。例如 3.0s 的 slot 对应 5.3s 的音频，导致后一句提前开始，`amix` 后两段音频叠加。
 - **修复**：手动重写 SRT，按每字约 0.28s + 0.5s 缓冲重新分配时间轴，总时长延长至约 112s，确保所有音频无重叠。
+
+---
+
+## 6.5 配乐系统（MusicDirector）
+
+### 核心概念（对应影视配乐工业标准）
+| 概念 | 说明 |
+|------|------|
+| **Cue / Cue Sheet** | 每段音乐的入出点、情绪标签、BPM。 |
+| **Hit Point** | 音乐重拍与画面动作的对齐点（`alignHitPoint`）。 |
+| **Duck / Sidechain** | 对话期间自动避让，带 Attack/Release 包络。 |
+| **Crossfade** | 场景切换时的音乐过渡（Fade In/Out 叠加）。 |
+| **Stem** | 分轨概念（Pad/Bass/Percussion/Melody），可动态混合。 |
+| **Master Bus** | 总线音量与最终限幅。 |
+
+### MusicDirector API (`lib/MusicDirector.js`)
+```js
+const md = new MusicDirector();
+md.addCue(new MusicCue({ name: 'park_theme', file: '...', startTime: 19.7, endTime: 39.8, fadeIn: 1.5, baseVolume: 0.5, emotion: 'upbeat', bpm: 110 }));
+md.autoDuckFromDialogues(srtEntries, depth=0.32, attack=0.12, release=0.35);
+const vol = md.computeCueVolume(cue, t); // t ∈ 全局时间
+const plan = md.exportMixPlan(); // 导出给 Python 混音器
+```
+
+### BGM 素材规范 (`assets/audio/music/`)
+| 文件名 | 场景 | 建议风格 | 推荐搜索词 |
+|--------|------|----------|-----------|
+| `room_theme.wav` | 室内借球拍 (0~19s) | 轻松、日常 | `calm piano`, `happy acoustic` |
+| `park_theme.wav` | 公园对打 (19~39s) | 轻快、运动 | `upbeat funk`, `energetic pop` |
+| `chaos_theme.wav` | 失控飞走 (39~68s) | 滑稽、紧张 | `comedy chase`, `cartoon funny` |
+
+**推荐来源**：
+- **Pixabay Music**（首选）：https://pixabay.com/music/ — 免费商用，无需署名。
+- **Fesliyan Studios Cartoon**：https://www.fesliyanstudios.com/royalty-free-music/downloads-c/cartoon-music/86
+- **Free Music Archive**：https://freemusicarchive.org/
 
 ---
 
@@ -204,6 +278,41 @@ export class AnimationBase {
 
 ---
 
+## 8.5 运镜系统
+
+### CameraMoveBase (`camera/CameraMoveBase.js`)
+```js
+export class CameraMoveBase {
+  constructor(options = {}) { ... }
+  start(camera, context) { }   // snapshot 初始状态
+  update(t, camera, context) { } // t ∈ [0, 1]
+  end(camera, context) { }     // 收尾
+}
+```
+
+### 注册方式
+所有运镜类导出到 `camera/index.js` 的 `CameraMoveRegistry`，以类名作为 key。
+
+### 当前可用运镜
+位于 `camera/common/`：
+- `Static.js`：固定机位，可显式设置 position / lookAt（支持数组 `position=6,2.5,2`）。
+- `ZoomIn.js` / `ZoomOut.js`：向/远离目标推/拉镜（easeInOutQuad）。
+- `Pan.js`：摄像机横向平移，保持 lookAt 不变。
+- `Orbit.js`：环绕目标点旋转（可配置半径、起止角度、高度）。
+- `Shake.js`：随机位置震动，带时间衰减，结束时复位。
+- `FollowCharacter.js`：持续跟随某角色（默认跟随 Nobita）。
+- `LowAngle.js`：低角度仰拍，适合表现「英雄时刻」。
+
+### Storyboard 集成
+`Storyboard.load()` 会自动解析 SRT 中的 `{Camera:ClassName|key=value}` 标签，提取参数后调用 `playCameraMove(MoveClass, startTime, duration, options)` 入队。`Storyboard.update(t)` 在每帧场景更新后执行运镜，通过 `cameraContext` 传入 `renderer/scene/characters/currentScene` 供运镜类访问。
+
+### 网球挥拍自动调度
+`Storyboard.switchScene('ParkScene')` 内通过 `CourtDirector` 自动编排对打：
+- 计算球轨迹 → 自动推导挥拍时机（receiver 在球到达前 30% 开始挥拍）。
+- 不再硬编码挥拍时间，角色位置一变，轨迹和挥拍全部自动对齐。
+
+---
+
 ## 9. 场景系统
 
 ### SceneBase (`scenes/SceneBase.js`)
@@ -216,14 +325,17 @@ export class AnimationBase {
 
 ### ParkScene (`scenes/ParkScene.js`)
 公园场景，包含：
-- 蓝天背景、草地、长椅、树木、云朵。
-- **网球网** (`this.net`)：两根柱子 + 白色半透明网 + 网格线。
+- 蓝天背景、草地、树木、云朵。
+- **独立网球场**：12×24 单位的蓝色场地，带白色边界线、中线、发球线、单打/双打边线。
+- **长椅**：两张，分别位于网球场左右两侧的草地观众席，面向场地。
+- **网球网** (`this.net`)：位于场地正中央（Z=0），两根柱子 + 白色半透明网 + 网格线。
 - **网球** (`this.tennisBall`)：黄色小球，可受 `ballTrajectory` 驱动飞行。
 - **球拍** (`createRacket(color)`)：手柄 + 圆环拍框 + 十字网线。
 - `attachRacketToCharacter(character, color)`：将球拍附加到角色右手（local 坐标）。
   - 默认旋转 `racket.rotation.set(Math.PI / 6, 0, Math.PI / 2)`，让拍面朝前更易见。
 - `setBallTrajectory(startTime, endTime, startPos, endPos, arcHeight)`：控制网球沿抛物线飞行。
 - `update(time, delta)`：先 `super.update()` 更新角色，再按 `ballTrajectory` 插值球的位置（easeInOutQuad + 正弦弧高）。
+- `getCourtGeometry()`：返回场地几何常量（`width/length/baselineZ/serviceLineZ/singlesWidth/doublesWidth/groundY`），供 `CourtDirector` 使用。
 
 ---
 
@@ -238,6 +350,7 @@ export class AnimationBase {
    - 初始化首场景，实例化所有提及角色。
    - `arrangeCharacters()`：按人数排位置（2 人时左右 -1.5 / +1.5）。
    - 自动调度 `{Action}` 动画。
+   - 自动调度 `{Camera:MoveName}` 运镜（入队到 `this.cameraMoves`）。
    - **自动调度场景过渡动作**：
      - 切换前：角色 `Walk` 至 `SCENE_EXITS[prevScene]`。
      - 切换瞬间：`teleport` 到 `SCENE_ENTRANCES[nextScene]`。
@@ -246,14 +359,13 @@ export class AnimationBase {
 2. `update(t)`：
    - 检测并执行场景切换。
    - 更新角色 speaking 状态（触发动嘴）。
-   - **公园场景网球飞行编排**：若当前是 `ParkScene`，按时间区间设置 `ballTrajectory`：
-     - `55.0s~57.5s`：第一球从哆啦A梦发向大雄。
-     - `59.5s~62.0s`：回球。
-     - `71.5s~73.5s`：第二球。
-     - `75.0s~77.0s`：回球。
-     - `86.5s~90.0s`：失控，球飞向 `(4, -4)`。
-     - `99.0s~102.0s`：球引向池塘 `(6, -8)`。
+   - **公园场景网球飞行编排**：若当前是 `ParkScene`，遍历 `this.ballEvents`（在 `switchScene` 时由 `CourtDirector` 预计算）：
+     - 每个事件含 `startTime` + `flight`（`startPos/endPos/arcHeight/duration`）。
+     - 当前时间命中事件区间时，调用 `setBallTrajectory()` 驱动球飞行。
+     - 事件间隙：球停在最近一个已完成事件的 `endPos`；首个事件前球停在 Doraemon 附近。
+     - 支持三种事件类型：`player`（角色→角色）、`toPos`（角色→固定坐标）、`posToPos`（固定→固定）。
    - 调用 `this.currentScene.update(t, 0.016)` 推进角色动画与球位。
+   - 执行 `this.cameraMoves` 队列中的运镜（在场景更新之后，渲染之前）。
 
 3. `render()`：调用 `renderer.render(scene, camera)`。
 
@@ -300,6 +412,7 @@ node tools/verify_shots.js
 | SRT 自动调整脚本 | 🔄 备用 | `tools/adjust_srt.py` 可根据现有 MP3 时长自动拉伸时间轴，但未启用。 |
 | 对话自然度 | ⚠️ 待优化 | 用户反馈「必中球拍」梗的对话仍不够自然、缺乏真正的哆啦A梦式幽默。 |
 | 球拍可见性 | ⚠️ 可优化 | 哆啦A梦身体较圆，红色球拍有时被身体遮挡，已稍微前倾，仍可在未来调整手臂 pose。 |
+| 硬编码坐标耦合 | ✅ 已修复 | 引入 `CourtDirector` 计算层，角色站位、球轨迹、挥拍时机全部通过场地几何自动计算，不再四处硬编码。 |
 
 ---
 
@@ -322,12 +435,13 @@ node tools/verify_shots.js
 
 按优先级排列：
 
-1. **最终视频生成**：当前所有修复已完成，跑 `node generate_video.js` 出片。
-2. **对话自然度再打磨**：若用户对剧情或幽默感仍不满意，需再次重写 SRT。建议方向：
+1. **BGM 质量提升**：当前程序化 BGM 为合成器演示级，建议替换为真实作曲或高质量 Loop 素材。
+2. **Phase 2：SRT 语义化扩展**（可选）：让 SRT 支持 `{Ball:Serve|to=Nobita}`、`{Camera:RallySide|focus=Doraemon}` 等语义标签，彻底摆脱手写坐标。
+3. **对话自然度再打磨**：若用户对剧情或幽默感仍不满意，需再次重写 SRT。建议方向：
    - 减少翻译腔，增加口语化短句。
    - 哆啦A梦的吐槽更犀利/无奈一点。
    - 结局的笑点更突出（如大雄落水后哆啦A梦的补刀）。
-3. **可选增强**：
+4. **可选增强**：
    - 给球拍添加「挥拍」动画（让手臂在击球瞬间抬起）。
    - 给球增加旋转效果或拖尾。
    - 添加更多场景（如池塘边缘的 visual 暗示）。
@@ -368,8 +482,39 @@ attachRacketToCharacter(character, color = 0xff3333) {
 ```
 
 ### Storyboard 公园球飞行编排
-见 `storyboard/Storyboard.js` 中 `// Park scene tennis ball choreography` 区块。
+`switchScene('ParkScene')` 内调用 `this._setupParkBallEvents()`，通过 `CourtDirector` 预计算：
+```js
+// 语义化站位
+cd.placePlayer('Doraemon', 'northBaseline');
+cd.placePlayer('Nobita', 'southBaseline');
+
+// 自动计算球轨迹 + 挥拍时机
+const flight = cd.computeBallFlight('Doraemon', 'Nobita', { arcHeight: 1.5 });
+const swingTime = cd.computeSwingTime(flight, startTime, 0.6);
+```
+
+### CourtDirector 核心 API (`lib/CourtDirector.js`)
+```js
+const cd = new CourtDirector(courtGeometry);
+
+// 语义化站位
+cd.placePlayer('Doraemon', 'northBaseline', { xOffset: 0, useDoubles: false });
+
+// 球轨迹（自动查角色位置）
+const flight = cd.computeBallFlight('Doraemon', 'Nobita', { speed: 8, arcHeight: 1.5 });
+// => { startPos, endPos, arcHeight, duration, distance }
+
+// 飞向固定坐标（失控球）
+const flight2 = cd.computeBallFlightToPos('Doraemon', {x:4, y:1, z:-4}, { arcHeight: 1.2 });
+
+// 相机机位（语义化）
+const cam = cd.computeCamera('rallySide', 'Doraemon', { distance: 14, height: 4 });
+// => { position: THREE.Vector3, lookAt: THREE.Vector3 }
+
+// 挥拍时机（球到达前 30% swingDuration）
+const swingTime = cd.computeSwingTime(flight, 55.0, 0.6);
+```
 
 ---
 
-**最后更新**：2026-04-16
+**最后更新**：2026-04-18

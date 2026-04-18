@@ -17,7 +17,7 @@ export class ParkScene extends SceneBase {
     // Sky blue background
     this.scene.background = new THREE.Color(0x87ceeb);
 
-    // Ground (grass)
+    // ---- Ground (grass) ----
     const groundGeo = new THREE.PlaneGeometry(60, 60);
     const groundMat = new THREE.MeshStandardMaterial({ color: 0x4caf50, roughness: 1.0 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
@@ -25,36 +25,87 @@ export class ParkScene extends SceneBase {
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // Bench
+    // ---- Tennis Court ----
+    const courtColor = new THREE.MeshStandardMaterial({ color: 0x3d6b8f, roughness: 0.7 });
+    const lineColor = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 });
+
+    // Main court surface (12 x 24 units, centered at origin)
+    const courtGeo = new THREE.PlaneGeometry(12, 24);
+    const court = new THREE.Mesh(courtGeo, courtColor);
+    court.rotation.x = -Math.PI / 2;
+    court.position.set(0, 0.01, 0); // slightly above grass
+    court.receiveShadow = true;
+    this.scene.add(court);
+
+    // Outer boundary line
+    const border = new THREE.Mesh(new THREE.PlaneGeometry(12.4, 24.4), lineColor);
+    border.rotation.x = -Math.PI / 2;
+    border.position.set(0, 0.005, 0);
+    this.scene.add(border);
+    // Inner court (so lines appear as white borders)
+    const courtInner = new THREE.Mesh(new THREE.PlaneGeometry(11.6, 23.6), courtColor);
+    courtInner.rotation.x = -Math.PI / 2;
+    courtInner.position.set(0, 0.008, 0);
+    this.scene.add(courtInner);
+
+    // Center line (along X, at Z=0)
+    const centerLine = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 12), lineColor);
+    centerLine.rotation.x = -Math.PI / 2;
+    centerLine.position.set(0, 0.015, 0);
+    this.scene.add(centerLine);
+
+    // Service lines (two horizontal lines at Z = +/-6)
+    for (const z of [-6, 6]) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(8, 0.08), lineColor);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(0, 0.015, z);
+      this.scene.add(line);
+    }
+
+    // Sidelines (two vertical lines at X = +/-4)
+    for (const x of [-4, 4]) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 24), lineColor);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(x, 0.015, 0);
+      this.scene.add(line);
+    }
+
+    // Singles sidelines (two vertical lines at X = +/-3)
+    for (const x of [-3, 3]) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 24), lineColor);
+      line.rotation.x = -Math.PI / 2;
+      line.position.set(x, 0.015, 0);
+      this.scene.add(line);
+    }
+
+    // ---- Tennis Net (in the middle, along X axis) ----
+    this.createNet();
+
+    // ---- Tennis Ball ----
+    this.createBall();
+
+    // ---- Benches (off to the side, facing the court) ----
     const woodMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b, roughness: 0.7 });
     const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.4 });
 
-    const benchSeat = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.1, 0.6), woodMat);
-    benchSeat.position.set(0, 0.5, -2);
-    benchSeat.castShadow = true;
-    this.scene.add(benchSeat);
+    // Bench on the left side of the court, facing center
+    this.createBench(woodMat, metalMat, -9, 0, 0, Math.PI / 2);
+    // Bench on the right side of the court, facing center
+    this.createBench(woodMat, metalMat, 9, 0, 0, -Math.PI / 2);
 
-    const benchBack = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 0.1), woodMat);
-    benchBack.position.set(0, 0.9, -2.25);
-    benchBack.castShadow = true;
-    this.scene.add(benchBack);
-
-    for (const x of [-1, 1]) {
-      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.5), metalMat);
-      leg.position.set(x, 0.25, -2);
-      this.scene.add(leg);
-    }
-
-    // Trees
+    // ---- Trees (in the background, away from court) ----
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5d4037, roughness: 0.9 });
     const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.8 });
 
     const treePositions = [
-      [-8, 0, -5],
-      [10, 0, -8],
-      [-12, 0, 4],
-      [9, 0, 6],
-      [-6, 0, -12],
+      [-15, 0, -10],
+      [15, 0, -10],
+      [-18, 0, 8],
+      [18, 0, 8],
+      [-12, 0, -18],
+      [12, 0, -18],
+      [-20, 0, -3],
+      [20, 0, -3],
     ];
 
     for (const [x, y, z] of treePositions) {
@@ -69,12 +120,13 @@ export class ParkScene extends SceneBase {
       this.scene.add(leaves);
     }
 
-    // Simple clouds (white spheres)
+    // ---- Simple clouds ----
     const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.8, roughness: 1.0 });
     const cloudPositions = [
       [-10, 12, -20],
       [5, 14, -25],
       [15, 11, -15],
+      [-8, 13, -18],
     ];
     for (const [cx, cy, cz] of cloudPositions) {
       const cloudGroup = new THREE.Group();
@@ -87,11 +139,31 @@ export class ParkScene extends SceneBase {
       this.scene.add(cloudGroup);
     }
 
-    // Tennis court props
-    this.createNet();
-    this.createBall();
-
     return this.scene;
+  }
+
+  createBench(woodMat, metalMat, x, y, z, rotationY = 0) {
+    const benchGroup = new THREE.Group();
+    benchGroup.position.set(x, y, z);
+    benchGroup.rotation.y = rotationY;
+
+    const seat = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.1, 0.6), woodMat);
+    seat.position.set(0, 0.5, 0);
+    seat.castShadow = true;
+    benchGroup.add(seat);
+
+    const back = new THREE.Mesh(new THREE.BoxGeometry(2.5, 0.6, 0.1), woodMat);
+    back.position.set(0, 0.9, -0.25);
+    back.castShadow = true;
+    benchGroup.add(back);
+
+    for (const bx of [-1, 1]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.5, 0.5), metalMat);
+      leg.position.set(bx, 0.25, 0);
+      benchGroup.add(leg);
+    }
+
+    this.scene.add(benchGroup);
   }
 
   createNet() {
@@ -100,7 +172,7 @@ export class ParkScene extends SceneBase {
     const netGroup = new THREE.Group();
     netGroup.position.set(0, 0, 0);
 
-    // Posts
+    // Posts (at the singles sidelines)
     for (const x of [-3, 3]) {
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 1.2, 12), poleMat);
       pole.position.set(x, 0.6, 0);
@@ -172,10 +244,22 @@ export class ParkScene extends SceneBase {
     return racket;
   }
 
+  getCourtGeometry() {
+    return {
+      width: 12,
+      length: 24,
+      netZ: 0,
+      baselineZ: 11,
+      serviceLineZ: 6,
+      singlesWidth: 6,
+      doublesWidth: 8,
+      groundY: 0.01,
+    };
+  }
+
   attachRacketToCharacter(character, color = 0xff3333) {
     if (!character.rightArm || !character.rightArmLength) return null;
     const racket = this.createRacket(color);
-    // Position at hand in local arm space
     racket.position.set(0, -character.rightArmLength, 0);
     character.rightArm.add(racket);
     return racket;

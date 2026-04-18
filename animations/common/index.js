@@ -5,6 +5,7 @@ export { WaveHand } from './WaveHand.js';
 export { StompFoot } from './StompFoot.js';
 export { Walk } from './Walk.js';
 export { TurnToCamera } from './TurnToCamera.js';
+export { SwingRacket } from './SwingRacket.js';
 
 import { Nod } from './Nod.js';
 import { Jump } from './Jump.js';
@@ -13,6 +14,7 @@ import { WaveHand } from './WaveHand.js';
 import { StompFoot } from './StompFoot.js';
 import { Walk } from './Walk.js';
 import { TurnToCamera } from './TurnToCamera.js';
+import { SwingRacket } from './SwingRacket.js';
 
 export const CommonAnimations = {
   Nod,
@@ -22,4 +24,5 @@ export const CommonAnimations = {
   StompFoot,
   Walk,
   TurnToCamera,
+  SwingRacket,
 };

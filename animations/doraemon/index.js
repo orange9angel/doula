@@ -1,2 +1,5 @@
-// Doraemon-specific animation registry (add exclusive animations here)
-export const DoraemonAnimations = {};
+import { PullOutRacket } from './PullOutRacket.js';
+
+export const DoraemonAnimations = {
+  PullOutRacket,
+};

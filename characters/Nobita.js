@@ -46,11 +46,15 @@ export class Nobita extends CharacterBase {
     const pupilGeo = new THREE.SphereGeometry(0.025, 16, 16);
     const leftPupil = new THREE.Mesh(pupilGeo, blackMat);
     leftPupil.position.set(-0.12, 0.05, 0.32);
+    leftPupil.userData.baseX = leftPupil.position.x;
     headGroup.add(leftPupil);
+    this.leftPupil = leftPupil;
 
     const rightPupil = new THREE.Mesh(pupilGeo, blackMat);
     rightPupil.position.set(0.12, 0.05, 0.32);
+    rightPupil.userData.baseX = rightPupil.position.x;
     headGroup.add(rightPupil);
+    this.rightPupil = rightPupil;
 
     const blueMat = new THREE.MeshStandardMaterial({ color: 0x1a3c8a, roughness: 0.6 });
 
