@@ -1,9 +1,9 @@
 {
   "name": "dula-engine",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Dula animation engine — Web (Three.js) + Puppeteer offline renderer driven by .story scripts",
   "type": "module",
-  "main": "main.js",
+  "main": "index.js",
   "bin": {
     "dula-render": "./bin/dula-render.js",
     "dula-verify": "./bin/dula-verify.js",
@@ -21,6 +21,8 @@
     "tools/",
     "render.html",
     "render.js",
+    "generate_video.js",
+    "index.js",
     "AGENTS.md"
   ],
   "scripts": {
