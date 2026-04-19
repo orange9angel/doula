@@ -284,31 +284,43 @@ node tools/verify_shots.js <episode-dir>
 
 ```bash
 cd dula-engine
+
 # 1. 确保 working directory clean
 git add -A && git commit -m "feat: ..."
 
 # 2. 打版本号（自动修改 package.json + package-lock.json + git tag）
-npm version patch       # patch: 0.1.0 -> 0.1.1
-# npm version minor     # minor: 0.1.1 -> 0.2.0
+npm version patch       # patch: 0.1.2 -> 0.1.3
+# npm version minor     # minor: 0.1.3 -> 0.2.0
 # npm version major     # major: 0.2.0 -> 1.0.0
 
 # 3. 生成 release tarball
-npm pack                # -> dula-engine-0.1.1.tgz
+npm pack                # -> dula-engine-0.1.3.tgz
 
-# 4. 上传到 GitHub Release Assets
-# 5. 推送 tag
+# 4. 推送代码和 tag
 git push origin main --tags
+
+# 5. 创建 GitHub Release 并上传 tarball（需要 gh CLI）
+gh release create v0.1.3 \
+  --title "dula-engine v0.1.3" \
+  --notes "Release notes..." \
+  dula-engine-0.1.3.tgz
 ```
+
+**前置条件**：
+- 已安装 [GitHub CLI](https://cli.github.com/) (`gh`)
+- 已执行 `gh auth login` 登录 GitHub
+- Git remote 指向 `orange9angel/dula-engine`
 
 ### Story 侧升级引擎版本
 
 ```bash
 cd dula-story
-# 方式 A：通过 GitHub Release URL
-npm install https://github.com/orange9angel/dula-engine/releases/download/v0.1.1/dula-engine-0.1.1.tgz
+# 方式 A：直接安装指定 Release URL
+npm install https://github.com/orange9angel/dula-engine/releases/download/v0.1.3/dula-engine-0.1.3.tgz
 
 # 方式 B：修改 package.json 后 install
-# "dependencies": { "dula-engine": "https://github.com/.../dula-engine-0.1.1.tgz" }
+# "dependencies": { "dula-engine": "https://github.com/.../dula-engine-0.1.3.tgz" }
+npm install
 ```
 
 ## 14. 开发工作流
@@ -321,9 +333,14 @@ npm install https://github.com/orange9angel/dula-engine/releases/download/v0.1.1
 
 ### 修改引擎代码（Engine 侧）
 1. 下载/clone engine 源码修改 → 测试通过。
-2. 在 Story 仓库（使用 `file:` 或 tarball 安装）运行 `npx dula-verify <episode>` 查看关键帧。
-3. 满意后按「发版流程」打版本号、生成 tarball、上传 Release。
-4. Story 更新版本号安装新版本。
+2. 在 Story 仓库临时切换为 `file:` 链接进行联调：
+   ```bash
+   cd dula-story
+   npm install ../dula-engine   # 临时切换本地开发模式
+   npm run verify
+   ```
+3. 满意后按「发版流程」打版本号、生成 tarball、上传 GitHub Release。
+4. Story 切回 Release URL 安装新版本。
 
 ---
 
