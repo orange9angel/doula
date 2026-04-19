@@ -89,6 +89,64 @@ export class Storyboard {
       }
     }
 
+    // Extract story-level choreography from .story DSL tags early
+    // so switchScene can apply placements & props for the initial scene.
+    this.storyPlacements = [];
+    this.storyProps = [];
+    this.storyBallEvents = [];
+    this.storyEvents = [];
+
+    for (const entry of this.entries) {
+      if (entry.positions) {
+        for (const pos of entry.positions) {
+          this.storyPlacements.push({
+            character: pos.name,
+            spot: pos.options.spot,
+            x: pos.options.x,
+            y: pos.options.y,
+            z: pos.options.z,
+            face: pos.options.face,
+          });
+        }
+      }
+      if (entry.propOps) {
+        for (const po of entry.propOps) {
+          this.storyProps.push({
+            type: po.name.toLowerCase(),
+            character: po.options.character,
+            color: po.options.color,
+          });
+        }
+      }
+      if (entry.ballEvents) {
+        for (const be of entry.ballEvents) {
+          this.storyBallEvents.push({
+            type: be.name.toLowerCase() === 'serve' || be.name.toLowerCase() === 'return' ? 'player' : be.name.toLowerCase(),
+            startTime: entry.startTime,
+            from: be.options.from,
+            to: be.options.to,
+            arcHeight: be.options.arcHeight,
+            speed: be.options.speed,
+          });
+        }
+      }
+      if (entry.storyEvents) {
+        for (const ev of entry.storyEvents) {
+          this.storyEvents.push({
+            type: ev.name.toLowerCase(),
+            character: ev.options.character,
+            startTime: entry.startTime,
+            duration: ev.options.duration,
+            relative: ev.options.relative === true || ev.options.relative === 'true' || ev.options.relative === 1,
+            x: ev.options.x,
+            y: ev.options.y,
+            z: ev.options.z,
+            action: ev.options.action,
+          });
+        }
+      }
+    }
+
     // Initialize first scene if specified
     const firstSceneEntry = this.entries.find((e) => e.scene);
     const initialSceneName = firstSceneEntry ? firstSceneEntry.scene : 'RoomScene';
@@ -232,63 +290,6 @@ export class Storyboard {
       activeScene = nextScene;
     }
 
-    // Extract story-level choreography from .story DSL tags (takes precedence over JSON config)
-    this.storyPlacements = [];
-    this.storyProps = [];
-    this.storyBallEvents = [];
-    this.storyEvents = [];
-
-    for (const entry of this.entries) {
-      if (entry.positions) {
-        for (const pos of entry.positions) {
-          this.storyPlacements.push({
-            character: pos.name,
-            spot: pos.options.spot,
-            x: pos.options.x,
-            y: pos.options.y,
-            z: pos.options.z,
-            face: pos.options.face,
-          });
-        }
-      }
-      if (entry.propOps) {
-        for (const po of entry.propOps) {
-          this.storyProps.push({
-            type: po.name.toLowerCase(),
-            character: po.options.character,
-            color: po.options.color,
-          });
-        }
-      }
-      if (entry.ballEvents) {
-        for (const be of entry.ballEvents) {
-          this.storyBallEvents.push({
-            type: be.name.toLowerCase() === 'serve' || be.name.toLowerCase() === 'return' ? 'player' : be.name.toLowerCase(),
-            startTime: entry.startTime,
-            from: be.options.from,
-            to: be.options.to,
-            arcHeight: be.options.arcHeight,
-            speed: be.options.speed,
-          });
-        }
-      }
-      if (entry.storyEvents) {
-        for (const ev of entry.storyEvents) {
-          this.storyEvents.push({
-            type: ev.name.toLowerCase(),
-            character: ev.options.character,
-            startTime: entry.startTime,
-            duration: ev.options.duration,
-            relative: ev.options.relative === true || ev.options.relative === 'true' || ev.options.relative === 1,
-            x: ev.options.x,
-            y: ev.options.y,
-            z: ev.options.z,
-            action: ev.options.action,
-          });
-        }
-      }
-    }
-
     // Tennis ball & swing choreography is handled in switchScene('ParkScene')
     // via CourtDirector, so that trajectories are computed from actual positions.
   }
@@ -328,6 +329,40 @@ export class Storyboard {
       this.arrangeCharacters();
     }
 
+    // Generic placements from story (x/y/z, no court spot)
+    if (this.storyPlacements) {
+      for (const p of this.storyPlacements) {
+        const char = this.characters.get(p.character);
+        if (!char) continue;
+        if (p.x !== undefined && p.z !== undefined) {
+          char.setPosition(p.x, p.y !== undefined ? p.y : 0, p.z);
+        }
+        if (p.face) {
+          if (p.face === 'center') {
+            char.mesh.lookAt(0, 1.5, 0);
+          } else {
+            const targetChar = this.characters.get(p.face);
+            if (targetChar) {
+              char.mesh.lookAt(targetChar.mesh.position.x, targetChar.mesh.position.y + 1.5, targetChar.mesh.position.z);
+            } else {
+              char.mesh.lookAt(0, 1.5, 0);
+            }
+          }
+        }
+      }
+    }
+
+    // Generic prop handling (all scenes)
+    if (this.storyProps) {
+      for (const p of this.storyProps) {
+        const char = this.characters.get(p.character);
+        if (!char) continue;
+        if (p.type === 'takecopter' && char.attachTakeCopter) {
+          char.attachTakeCopter();
+        }
+      }
+    }
+
     // ParkScene setup: characters placement, props, ball events from choreography config
     if (this.currentSceneName === 'ParkScene') {
       const courtGeom = this.currentScene.getCourtGeometry();
@@ -344,25 +379,9 @@ export class Storyboard {
       if (placements) {
         for (const p of placements) {
           const char = this.characters.get(p.character);
-          if (!char) continue;
-          if (p.spot) {
-            const pos = this.courtDirector.placePlayer(p.character, p.spot, { face: p.face });
-            char.setPosition(pos.x, pos.y, pos.z);
-          } else if (p.x !== undefined && p.z !== undefined) {
-            char.setPosition(p.x, p.y !== undefined ? p.y : 0, p.z);
-          }
-          if (p.face) {
-            if (p.face === 'center') {
-              char.mesh.lookAt(0, 1.5, 0);
-            } else {
-              const targetChar = this.characters.get(p.face);
-              if (targetChar) {
-                char.mesh.lookAt(targetChar.mesh.position.x, targetChar.mesh.position.y + 1.5, targetChar.mesh.position.z);
-              } else {
-                char.mesh.lookAt(0, 1.5, 0);
-              }
-            }
-          }
+          if (!char || !p.spot) continue;
+          const pos = this.courtDirector.placePlayer(p.character, p.spot, { face: p.face });
+          char.setPosition(pos.x, pos.y, pos.z);
         }
       }
 
