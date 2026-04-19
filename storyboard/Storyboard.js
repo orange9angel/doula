@@ -232,6 +232,63 @@ export class Storyboard {
       activeScene = nextScene;
     }
 
+    // Extract story-level choreography from .story DSL tags (takes precedence over JSON config)
+    this.storyPlacements = [];
+    this.storyProps = [];
+    this.storyBallEvents = [];
+    this.storyEvents = [];
+
+    for (const entry of this.entries) {
+      if (entry.positions) {
+        for (const pos of entry.positions) {
+          this.storyPlacements.push({
+            character: pos.name,
+            spot: pos.options.spot,
+            x: pos.options.x,
+            y: pos.options.y,
+            z: pos.options.z,
+            face: pos.options.face,
+          });
+        }
+      }
+      if (entry.propOps) {
+        for (const po of entry.propOps) {
+          this.storyProps.push({
+            type: po.name.toLowerCase(),
+            character: po.options.character,
+            color: po.options.color,
+          });
+        }
+      }
+      if (entry.ballEvents) {
+        for (const be of entry.ballEvents) {
+          this.storyBallEvents.push({
+            type: be.name.toLowerCase() === 'serve' || be.name.toLowerCase() === 'return' ? 'player' : be.name.toLowerCase(),
+            startTime: entry.startTime,
+            from: be.options.from,
+            to: be.options.to,
+            arcHeight: be.options.arcHeight,
+            speed: be.options.speed,
+          });
+        }
+      }
+      if (entry.storyEvents) {
+        for (const ev of entry.storyEvents) {
+          this.storyEvents.push({
+            type: ev.name.toLowerCase(),
+            character: ev.options.character,
+            startTime: entry.startTime,
+            duration: ev.options.duration,
+            relative: ev.options.relative === true || ev.options.relative === 'true' || ev.options.relative === 1,
+            x: ev.options.x,
+            y: ev.options.y,
+            z: ev.options.z,
+            action: ev.options.action,
+          });
+        }
+      }
+    }
+
     // Tennis ball & swing choreography is handled in switchScene('ParkScene')
     // via CourtDirector, so that trajectories are computed from actual positions.
   }
@@ -278,8 +335,11 @@ export class Storyboard {
 
       const parkChoreo = this.choreography ? this.choreography.parkScene : null;
 
-      if (parkChoreo && parkChoreo.placements) {
-        for (const p of parkChoreo.placements) {
+      const placements = this.storyPlacements.length > 0 ? this.storyPlacements : (parkChoreo ? parkChoreo.placements : []);
+      const props = this.storyProps.length > 0 ? this.storyProps : (parkChoreo ? parkChoreo.props : []);
+
+      if (placements) {
+        for (const p of placements) {
           const char = this.characters.get(p.character);
           if (!char) continue;
           if (p.spot) {
@@ -303,8 +363,8 @@ export class Storyboard {
         }
       }
 
-      if (parkChoreo && parkChoreo.props) {
-        for (const p of parkChoreo.props) {
+      if (props) {
+        for (const p of props) {
           const char = this.characters.get(p.character);
           if (char && !char.racketAttached && p.type === 'racket') {
             const color = parseInt(p.color, 16);
@@ -338,8 +398,8 @@ export class Storyboard {
     this.ballEvents = [];
 
     const parkChoreo = this.choreography ? this.choreography.parkScene : null;
-    const ballEventsCfg = parkChoreo ? parkChoreo.ballEvents : [];
-    const storyEventsCfg = parkChoreo ? parkChoreo.storyEvents : [];
+    const ballEventsCfg = this.storyBallEvents.length > 0 ? this.storyBallEvents : (parkChoreo ? parkChoreo.ballEvents : []);
+    const storyEventsCfg = this.storyEvents.length > 0 ? this.storyEvents : (parkChoreo ? parkChoreo.storyEvents : []);
 
     for (const cfg of ballEventsCfg) {
       if (cfg.type === 'player' && cfg.from && cfg.to) {

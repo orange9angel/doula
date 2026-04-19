@@ -12,8 +12,8 @@ const PORT = 8765;
 const FPS = 30;
 
 // Resolve episode path from CLI argument
-const EPISODE = process.argv[2] || path.join(__dirname, 'content', 'episodes', 'bichong_qiupai');
-const EPISODE_DIR = path.isAbsolute(EPISODE) ? EPISODE : path.join(__dirname, EPISODE);
+const EPISODE = process.argv[2] || '.';
+const EPISODE_DIR = path.isAbsolute(EPISODE) ? EPISODE : path.resolve(process.cwd(), EPISODE);
 
 const FRAMES_DIR = path.join(EPISODE_DIR, 'storyboard', 'frames');
 const MIXED_AUDIO = path.join(EPISODE_DIR, 'assets', 'audio', 'mixed.wav');

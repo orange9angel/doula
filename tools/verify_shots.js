@@ -11,8 +11,8 @@ const ROOT = path.join(__dirname, '..');
 const PORT = 8766;
 
 // Resolve episode path from CLI argument
-const EPISODE = process.argv[2] || path.join(ROOT, 'content', 'episodes', 'bichong_qiupai');
-const EPISODE_DIR = path.isAbsolute(EPISODE) ? EPISODE : path.join(ROOT, EPISODE);
+const EPISODE = process.argv[2] || '.';
+const EPISODE_DIR = path.isAbsolute(EPISODE) ? EPISODE : path.resolve(process.cwd(), EPISODE);
 const CHECK_DIR = path.join(EPISODE_DIR, 'storyboard');
 
 console.log(`Episode dir: ${EPISODE_DIR}`);

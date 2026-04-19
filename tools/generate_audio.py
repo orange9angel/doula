@@ -19,9 +19,9 @@ import wave
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # Resolve episode path from CLI argument
-EPISODE = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, "content", "episodes", "bichong_qiupai")
+EPISODE = sys.argv[1] if len(sys.argv) > 1 else "."
 if not os.path.isabs(EPISODE):
-    EPISODE = os.path.join(ROOT, EPISODE)
+    EPISODE = os.path.join(os.getcwd(), EPISODE)
 
 STORY_PATH = os.path.join(EPISODE, "script.story")
 OUTPUT_DIR = os.path.join(EPISODE, "assets", "audio")
@@ -218,7 +218,7 @@ def mix_bgm_track(cues, entries, duration, sample_rate=48000):
         duck_events = merged
 
     for cue in cues:
-        file_path = os.path.join(ROOT, "assets", "audio", "music", f"{cue['name']}.wav")
+        file_path = os.path.join(EPISODE, "assets", "audio", "music", f"{cue['name']}.wav")
         if not os.path.exists(file_path):
             print(f"Warning: BGM file not found: {file_path}")
             continue
@@ -318,7 +318,7 @@ def mix_audio(manifest, bgm_path=None, sfx_events=None):
     filters = []
     stream_idx = 0
     for entry in entries:
-        file_path = os.path.join(ROOT, entry["file"])
+        file_path = os.path.join(OUTPUT_DIR, entry["file"])
         inputs.append(f'-i "{file_path}"')
         delay_ms = int(round(entry["startTime"] * 1000))
         filters.append(f"[{stream_idx}:a]adelay={delay_ms}|{delay_ms}[ad{stream_idx}]")
