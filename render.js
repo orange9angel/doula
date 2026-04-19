@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
 import { Storyboard } from './storyboard/Storyboard.js';
 
 const width = 1920;
@@ -17,13 +16,6 @@ const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
 camera.position.set(0, 3, 10);
 camera.lookAt(0, 1.5, 0);
 
-const outlineEffect = new OutlineEffect(renderer, {
-  defaultThickness: 0.003,
-  defaultColor: [0, 0, 0],
-  defaultAlpha: 0.85,
-  defaultKeepAlive: true,
-});
-
 // Load Story bootstrap (registers assets + custom plugins)
 try {
   await import('/episode/bootstrap.js');
@@ -31,7 +23,7 @@ try {
   console.warn('No bootstrap.js found, running with empty registries:', e.message);
 }
 
-const storyboard = new Storyboard(renderer, camera, null, outlineEffect);
+const storyboard = new Storyboard(renderer, camera, null, null);
 const fadeDiv = document.getElementById('fade');
 
 async function renderFrames() {
