@@ -533,6 +533,27 @@ def apply_voice_effect(input_path, output_path, effect):
     return output_path
 
 
+def merge_voice_effects(base_effect, directed_effect):
+    """Compose character cleanup with reviewed per-line ffmpeg treatment."""
+    filters = []
+    volume = 1.0
+    for effect in (base_effect, directed_effect):
+        if not isinstance(effect, dict):
+            continue
+        if effect.get("af"):
+            filters.append(str(effect["af"]))
+        elif effect.get("rubberband"):
+            filters.append(f"rubberband={effect['rubberband']}")
+        if effect.get("volume") is not None:
+            volume *= float(effect["volume"])
+    if not filters:
+        return None
+    merged = {"af": ",".join(filters)}
+    if abs(volume - 1.0) > 0.0001:
+        merged["volume"] = volume
+    return merged
+
+
 def generate_punch_hit_sfx(filepath, duration=0.15, sample_rate=48000):
     """Punch impact: low thud + sharp crack."""
     n = int(sample_rate * duration)
@@ -1600,7 +1621,30 @@ async def generate(force_tts=False):
                 volume=params.get("volume", "+0%"),
             )
 
-            effect = params.get("effect")
+            directed_effect = None
+            if tone_entry:
+                post_effect = tone_entry.get("postEffect", {})
+                if isinstance(post_effect, dict):
+                    candidate = post_effect.get("ffmpeg")
+                    if isinstance(candidate, dict):
+                        directed_effect = candidate
+            if directed_effect:
+                inherit_character = bool(
+                    directed_effect.get("inheritCharacterEffect", False)
+                )
+                if inherit_character:
+                    effect = merge_voice_effects(
+                        params.get("effect"),
+                        directed_effect,
+                    )
+                else:
+                    effect = {
+                        key: value
+                        for key, value in directed_effect.items()
+                        if key != "inheritCharacterEffect"
+                    }
+            else:
+                effect = params.get("effect")
             if effect:
                 raw_path = filepath.replace(".mp3", "_raw.mp3")
                 await communicate.save(raw_path)
@@ -1633,6 +1677,7 @@ async def generate(force_tts=False):
                 "tone": tone_entry.get("toneId") if tone_entry else None,
                 "toneConfidence": tone_entry.get("confidence") if tone_entry else None,
                 "semanticVoice": tone_entry.get("ttsParams") if tone_entry else None,
+                "semanticPostEffect": tone_entry.get("postEffect") if tone_entry else None,
             }
         )
 
