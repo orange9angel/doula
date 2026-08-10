@@ -45,6 +45,7 @@ dula-story   ← 内容仓库（剧本/配置/素材/输出）
 - `lib/StoryParser.js`：`.story` 剧本解析器（支持命名空间标签）。
 - `lib/ProceduralAudioProtocol.js`：`{SFX:Procedural|...}` 协议解析器。
 - `storyboard/Storyboard.js`：导演核心（场景/角色/动画/运镜/音乐/球事件调度）。
+- `test/`：纯逻辑模块的 node:test 冒烟测试（`npm test` 运行，无额外依赖）。
 
 ---
 
@@ -59,7 +60,7 @@ dula-engine/
 ├── package.json
 ├── lib/
 │   ├── StoryParser.js         # .story 解析器（命名空间标签路由）
-│   ├── CourtDirector.js       # ⚠️ 临时保留，待迁移到 dula-assets 后移除
+│   ├── DirectorRegistry.js    # 领域 Director 注册表（CourtDirector 等由 dula-assets 注入）
 │   ├── MusicDirector.js       # 配乐调度器（Cue/Duck/HitPoint/Stem）
 │   └── MathUtils.js           # 通用数学工具
 ├── scenes/
@@ -274,8 +275,9 @@ npm link dula-engine
 - `switchScene(name)`：场景切换 + 角色迁移 + ParkScene 特殊编排（站位/道具/球事件）。
 - `update(t)`：场景切换检测、角色 speaking 状态、ParkScene 球飞行、角色动画、运镜执行。
 
-### CourtDirector (`lib/CourtDirector.js`)
-语义化球场编排：
+### CourtDirector（位于 `dula-assets/lib/CourtDirector.js`）
+语义化球场编排。实现在资产库中，通过 `registerDirector('CourtDirector', ...)` 注入；
+Storyboard 经 `DirectorRegistry['CourtDirector']` 动态获取（未注册时跳过球场编排），engine 不直接依赖 assets：
 - `placePlayer(name, spot)` → 自动计算坐标
 - `computeBallFlight(from, to, {arcHeight, speed})` → 轨迹
 - `computeSwingTime(flight, startTime, swingDuration)` → 挥拍时机
@@ -415,7 +417,7 @@ npm install
 4. 确认无误后，运行 `npx dula-render .`（或 `npm run render`）生成最终视频。
 
 ### 修改引擎代码（Engine 侧）
-1. 下载/clone engine 源码修改 → 测试通过。
+1. 下载/clone engine 源码修改 → 测试通过（`npm test`，运行 `test/` 下纯逻辑模块的 node:test 冒烟测试；不依赖浏览器/网络/three.js）。
 2. 在 Story 仓库临时切换为 `file:` 链接进行联调：
    ```bash
    cd dula-story
